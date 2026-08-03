@@ -4,3 +4,4 @@ python-multipart
 pyjwt
 pdfplumber
 pydantic==2.7.1
+email-validator
