@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({ 
-  baseURL: 'https://careerboost-ai-backend.onrender.com/api' 
+  baseURL: 'https://careerboost-ai-backend.onrender.com/api'
 })
 
 api.interceptors.request.use(cfg => {
