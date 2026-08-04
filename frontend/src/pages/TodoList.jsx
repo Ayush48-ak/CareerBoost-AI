@@ -29,7 +29,7 @@ export default function TodoList() {
   const [form, setForm]         = useState({ title: '', category: 'General', priority: 'Medium', due_date: '' })
 
   useEffect(() => {
-    api.get('/todos').then(r => setTodos(r.data)).finally(() => setLoading(false))
+    api.get('/app/todos').then(r => setTodos(r.data)).finally(() => setLoading(false))
   }, [])
 
   const add = async e => {
@@ -37,7 +37,7 @@ export default function TodoList() {
     if (!form.title.trim()) return
     setAdding(true)
     try {
-      const { data } = await api.post('/todos', form)
+      const { data } = await api.post('/app/todos', form)
       setTodos(t => [data, ...t])
       setForm({ title: '', category: 'General', priority: 'Medium', due_date: '' })
       setShowForm(false)
@@ -47,12 +47,12 @@ export default function TodoList() {
   }
 
   const toggle = async id => {
-    const { data } = await api.patch(`/todos/${id}/toggle`)
+    const { data } = await api.patch(`/app/todos/${id}/toggle`)
     setTodos(t => t.map(x => x.id === id ? data : x))
   }
 
   const del = async id => {
-    await api.delete(`/todos/${id}`)
+    await api.delete(`/app/todos/${id}`)
     setTodos(t => t.filter(x => x.id !== id))
     toast.success('Task removed')
   }
