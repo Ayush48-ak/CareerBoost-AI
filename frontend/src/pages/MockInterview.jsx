@@ -19,7 +19,7 @@ export default function MockInterview() {
     if (!role) { toast.error('Select a role first'); return }
     setLoading(true)
     try {
-      const { data } = await api.get(`/interview/questions?role=${encodeURIComponent(role)}`)
+      const { data } = await api.get(`/api/interview/questions?role=${encodeURIComponent(role)}`)
       setQuestions(data.questions)
       setCurrent(0); setAnswers({}); setAnswer(''); setShowHint(false); setDone(false)
     } catch { toast.error('Failed to load questions') }
