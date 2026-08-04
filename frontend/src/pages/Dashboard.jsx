@@ -19,7 +19,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.get('/dashboard').then(r => setData(r.data)).finally(() => setLoading(false))
+    api.get('/api/dashboard').then(r => setData(r.data)).finally(() => setLoading(false))
   }, [])
 
   const exportCSV = () => {
