@@ -82,7 +82,7 @@ export default function JobTracker() {
   const [filter, setFilter]   = useState('All')
 
   useEffect(() => {
-    api.get('/jobs').then(r => setJobs(r.data)).finally(() => setLoading(false))
+    api.get('/api/jobs').then(r => setJobs(r.data)).finally(() => setLoading(false))
   }, [])
 
   const openAdd  = () => { setForm(EMPTY); setModal('add') }
@@ -94,11 +94,11 @@ export default function JobTracker() {
     setSaving(true)
     try {
       if (modal === 'add') {
-        const { data } = await api.post('/jobs', form)
+        const { data } = await api.post('/api/jobs', form)
         setJobs(j => [data, ...j])
         toast.success('Job added')
       } else {
-        const { data } = await api.put(`/jobs/${modal.id}`, form)
+        const { data } = await api.put(`/api/jobs/${modal.id}`, form)
         setJobs(j => j.map(x => x.id === data.id ? data : x))
         toast.success('Job updated')
       }
@@ -109,7 +109,7 @@ export default function JobTracker() {
 
   const del = async id => {
     if (!confirm('Delete this application?')) return
-    await api.delete(`/jobs/${id}`)
+    await api.delete(`/api/jobs/${id}`)
     setJobs(j => j.filter(x => x.id !== id))
     toast.success('Deleted')
   }
