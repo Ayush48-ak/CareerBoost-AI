@@ -379,3 +379,9 @@ def export_jobs(current_user=Depends(get_current_user)):
     output.seek(0)
     return StreamingResponse(output, media_type="text/csv",
                              headers={"Content-Disposition": "attachment; filename=jobs.csv"})
+@app.get("/")
+def root():
+    return {
+        "status": "ok",
+        "message": "CareerBoost AI Backend is running"
+    }
