@@ -24,7 +24,7 @@ export default function Dashboard() {
 
   const exportCSV = () => {
     const link = document.createElement('a')
-    link.href = '/api/export/jobs'
+    link.href = 'https://careerboost-ai-z74g.onrender.com/api/export/jobs'
     link.setAttribute('download', 'jobs.csv')
     document.body.appendChild(link)
     link.click()
