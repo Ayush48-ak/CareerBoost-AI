@@ -4,13 +4,13 @@ import api from '../utils/api'
 const AuthCtx = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser]     = useState(null)
+  const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (token) {
-      api.get('/auth/me')
+      api.get('/api/auth/me')
         .then(r => setUser(r.data))
         .catch(() => localStorage.removeItem('token'))
         .finally(() => setLoading(false))
@@ -21,7 +21,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const form = new URLSearchParams({ username: email, password })
-    const { data } = await api.post('/auth/login', form, {
+    const { data } = await api.post('/api/auth/login', form, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     })
     localStorage.setItem('token', data.access_token)
@@ -30,7 +30,7 @@ export function AuthProvider({ children }) {
   }
 
   const register = async (name, email, password) => {
-    const { data } = await api.post('/auth/register', { name, email, password })
+    const { data } = await api.post('/api/auth/register', { name, email, password })
     localStorage.setItem('token', data.token)
     setUser(data.user)
     return data
