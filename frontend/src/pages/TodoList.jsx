@@ -29,7 +29,7 @@ export default function TodoList() {
   const [form, setForm]         = useState({ title: '', category: 'General', priority: 'Medium', due_date: '' })
 
   useEffect(() => {
-    api.get('/api/todos').then(r => setTodos(r.data)).finally(() => setLoading(false))
+    api.get('/todos').then(r => setTodos(r.data)).finally(() => setLoading(false))
   }, [])
 
   const add = async e => {
@@ -37,7 +37,7 @@ export default function TodoList() {
     if (!form.title.trim()) return
     setAdding(true)
     try {
-      const { data } = await api.post('/api/todos', form)
+      const { data } = await api.post('/todos', form)
       setTodos(t => [data, ...t])
       setForm({ title: '', category: 'General', priority: 'Medium', due_date: '' })
       setShowForm(false)
@@ -47,12 +47,12 @@ export default function TodoList() {
   }
 
   const toggle = async id => {
-    const { data } = await api.patch(`/api/todos/${id}/toggle`)
+    const { data } = await api.patch(`/todos/${id}/toggle`)
     setTodos(t => t.map(x => x.id === id ? data : x))
   }
 
   const del = async id => {
-    await api.delete(`/api/todos/${id}`)
+    await api.delete(`/todos/${id}`)
     setTodos(t => t.filter(x => x.id !== id))
     toast.success('Task removed')
   }
@@ -82,7 +82,6 @@ export default function TodoList() {
         </button>
       </div>
 
-      {/* Progress */}
       {total > 0 && (
         <div className="card p-4">
           <div className="flex items-center justify-between mb-2">
@@ -97,7 +96,6 @@ export default function TodoList() {
         </div>
       )}
 
-      {/* Add form */}
       {showForm && (
         <form onSubmit={add} className="card p-5 space-y-3 animate-slide-up">
           <input
@@ -132,7 +130,6 @@ export default function TodoList() {
         </form>
       )}
 
-      {/* Category filter */}
       <div className="flex gap-2 flex-wrap">
         {['All', ...CATEGORIES].map(c => (
           <button key={c} onClick={() => setFilter(c)}
@@ -142,7 +139,6 @@ export default function TodoList() {
         ))}
       </div>
 
-      {/* Todo items */}
       {filtered.length === 0 ? (
         <div className="card p-12 text-center">
           <CheckSquare size={36} className="mx-auto text-slate-600 mb-3" />
