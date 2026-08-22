@@ -173,6 +173,7 @@ export default function MockInterview() {
   const [done, setDone]           = useState(false)
   const [activeTypes, setActiveTypes] = useState(['behavioral', 'technical', 'coding'])
 
+<<<<<<< HEAD
   const start = () => {
     const selectedRole = role || customRole
     if (!selectedRole) { toast.error('Select or type a role first'); return }
@@ -192,6 +193,17 @@ export default function MockInterview() {
 
     setQuestions(allQuestions)
     setCurrent(0); setAnswers({}); setAnswer(''); setShowHint(false); setDone(false)
+=======
+  const start = async () => {
+    if (!role) { toast.error('Select a role first'); return }
+    setLoading(true)
+    try {
+      const { data } = await api.get(`/api/interview/questions?role=${encodeURIComponent(role)}`)
+      setQuestions(data.questions)
+      setCurrent(0); setAnswers({}); setAnswer(''); setShowHint(false); setDone(false)
+    } catch { toast.error('Failed to load questions') }
+    finally { setLoading(false) }
+>>>>>>> 8c089d634153773c0de864b948b5e6d19c5ba204
   }
 
   const saveAnswer = () => {

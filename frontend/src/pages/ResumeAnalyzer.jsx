@@ -31,7 +31,7 @@ export default function ResumeAnalyzer() {
   const fileRef               = useRef()
 
   useEffect(() => {
-    api.get('/resume/latest').then(r => setResume(r.data)).finally(() => setFetching(false))
+    api.get('/api/resume/latest').then(r => setResume(r.data)).finally(() => setFetching(false))
   }, [])
 
   const upload = async file => {
@@ -41,7 +41,7 @@ export default function ResumeAnalyzer() {
     const fd = new FormData()
     fd.append('file', file)
     try {
-      const { data } = await api.post('/resume/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const { data } = await api.post('/api/resume/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
       setResume(data)
       toast.success('Resume analyzed!')
     } catch {

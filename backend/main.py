@@ -11,15 +11,21 @@ app = FastAPI(title="CareerBoost AI", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+<<<<<<< HEAD
     "http://localhost:5173",
     "http://localhost:3000",
     "https://careerboost-frontend.onrender.com"
 ],
+=======
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://careerboost-frontend.onrender.com"
+    ],
+>>>>>>> 8c089d634153773c0de864b948b5e6d19c5ba204
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 SECRET_KEY = "careerboost-secret-key-2024"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
@@ -28,7 +34,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 DB_PATH = Path(__file__).parent / "database.db"
 
-# ─────────────────────────── DB INIT ───────────────────────────
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -87,7 +92,6 @@ def init_db():
 
 init_db()
 
-# ─────────────────────────── AUTH HELPERS ───────────────────────────
 def hash_password(p): return hashlib.sha256(p.encode()).hexdigest()
 
 def create_token(data: dict):
@@ -111,7 +115,6 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-# ─────────────────────────── RESUME PARSER ───────────────────────────
 SKILL_KEYWORDS = [
     "python","javascript","typescript","react","vue","angular","node","fastapi",
     "django","flask","sql","postgresql","mysql","mongodb","redis","docker",
@@ -140,10 +143,7 @@ def extract_experience(text: str):
     matches = re.findall(r'(\d+)\+?\s*years?', text, re.I)
     return max([int(m) for m in matches], default=0)
 
-# ─────────────────────────── ROUTES ───────────────────────────
-
-# AUTH
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 class RegisterBody(BaseModel):
     name: str
@@ -181,7 +181,6 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
 def me(current_user=Depends(get_current_user)):
     return {"id": current_user["id"], "name": current_user["name"], "email": current_user["email"]}
 
-# RESUME
 @app.post("/api/resume/upload")
 async def upload_resume(file: UploadFile = File(...), current_user=Depends(get_current_user)):
     content = await file.read()
@@ -191,11 +190,9 @@ async def upload_resume(file: UploadFile = File(...), current_user=Depends(get_c
             text = "\n".join(p.extract_text() or "" for p in pdf.pages)
     except Exception:
         text = content.decode("utf-8", errors="ignore")
-
     skills = extract_skills(text)
     ats = calc_ats_score(text, skills)
     exp = extract_experience(text)
-
     db = get_db()
     db.execute(
         "INSERT INTO resumes(user_id,filename,raw_text,skills,ats_score,experience_years) VALUES(?,?,?,?,?,?)",
@@ -221,7 +218,6 @@ def get_latest_resume(current_user=Depends(get_current_user)):
     r["skills"] = json.loads(r["skills"] or "[]")
     return r
 
-# JOBS
 class JobBody(BaseModel):
     company: str
     role: str
@@ -274,7 +270,6 @@ def delete_job(job_id: int, current_user=Depends(get_current_user)):
     db.close()
     return {"ok": True}
 
-# TODOS
 class TodoBody(BaseModel):
     title: str
     category: str = "General"
@@ -322,7 +317,6 @@ def delete_todo(todo_id: int, current_user=Depends(get_current_user)):
     db.close()
     return {"ok": True}
 
-# MOCK INTERVIEW
 QUESTIONS_BY_ROLE = {
     "default": [
         "Tell me about yourself and your background.",
@@ -354,7 +348,6 @@ def get_questions(role: str = "default", current_user=Depends(get_current_user))
         else "default"
     return {"questions": QUESTIONS_BY_ROLE["default"] + QUESTIONS_BY_ROLE[key]}
 
-# DASHBOARD STATS
 @app.get("/api/dashboard")
 def dashboard(current_user=Depends(get_current_user)):
     db = get_db()
@@ -363,11 +356,9 @@ def dashboard(current_user=Depends(get_current_user)):
     todos = [dict(r) for r in db.execute("SELECT * FROM todos WHERE user_id=?", (uid,)).fetchall()]
     resume = db.execute("SELECT * FROM resumes WHERE user_id=? ORDER BY id DESC LIMIT 1", (uid,)).fetchone()
     db.close()
-
     status_counts = {}
     for j in jobs:
         status_counts[j["status"]] = status_counts.get(j["status"], 0) + 1
-
     return {
         "total_jobs": len(jobs),
         "status_breakdown": status_counts,
@@ -378,7 +369,6 @@ def dashboard(current_user=Depends(get_current_user)):
         "recent_jobs": jobs[:5],
     }
 
-# EXPORT
 from fastapi.responses import StreamingResponse
 import csv, io
 
@@ -396,3 +386,9 @@ def export_jobs(current_user=Depends(get_current_user)):
     output.seek(0)
     return StreamingResponse(output, media_type="text/csv",
                              headers={"Content-Disposition": "attachment; filename=jobs.csv"})
+@app.get("/")
+def root():
+    return {
+        "status": "ok",
+        "message": "CareerBoost AI Backend is running"
+    }
