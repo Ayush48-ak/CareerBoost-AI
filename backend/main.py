@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from datetime import datetime, timedelta
@@ -25,10 +25,18 @@ from database import (
 
 # ─────────────────────────── APP ───────────────────────────
 
-app = FastAPI(
-    title="CareerBoost AI",
-    version="1.0.0"
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://careerboostai01.netlify.app",
+        "http://localhost:5173"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
 
 
 app.add_middleware(
