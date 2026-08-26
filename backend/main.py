@@ -1,58 +1,68 @@
-from fastapi.middleware.cors import CORSMiddleware, HTTPException, Depends, UploadFile, File
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Depends,
+    UploadFile,
+    File
+)
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from datetime import datetime, timedelta
-from typing import Optional
-from pydantic import BaseModel
-from bson import ObjectId
 from fastapi.responses import StreamingResponse
 
-import json
+from datetime import datetime, timedelta
+from typing import Optional
+
+from pydantic import BaseModel
+
 import hashlib
 import jwt
 import re
+import json
 import csv
 import io
 
-# MongoDB collections
+from bson import ObjectId
+
 from database import (
+    db,
     users_collection,
     resumes_collection,
     jobs_collection,
-    todos_collection,
+    todos_collection
 )
 
 
-# ─────────────────────────── APP ───────────────────────────
+# ============================================================
+# APP
+# ============================================================
 
-app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://careerboostai01.netlify.app",
-        "http://localhost:5173"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+app = FastAPI(
+    title="CareerBoost AI",
+    version="1.0.0"
 )
 
 
+# ============================================================
+# CORS
+# ============================================================
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:3000",
-        "https://careerboost-frontend.onrender.com"
+        "https://careerboostai01.netlify.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 
-# ─────────────────────────── AUTH CONFIG ───────────────────────────
+# ============================================================
+# JWT CONFIGURATION
+# ============================================================
 
 SECRET_KEY = "careerboost-secret-key-2024"
 ALGORITHM = "HS256"
@@ -63,31 +73,28 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 
 
-# ─────────────────────────── HELPERS ───────────────────────────
+# ============================================================
+# MONGODB HELPERS
+# ============================================================
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+def convert_object_id(value: str):
+    """
+    Convert a string ID into MongoDB ObjectId.
+    """
+    try:
+        return ObjectId(value)
 
-
-def create_token(data: dict):
-    exp = datetime.utcnow() + timedelta(
-        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
-    )
-
-    return jwt.encode(
-        {
-            **data,
-            "exp": exp
-        },
-        SECRET_KEY,
-        algorithm=ALGORITHM
-    )
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid ID"
+        )
 
 
 def serialize_document(document):
     """
-    Convert MongoDB ObjectId to string so
-    React/frontend can use it.
+    Convert MongoDB ObjectId into a normal string ID
+    so React/FastAPI can work with it.
     """
 
     if not document:
@@ -99,24 +106,39 @@ def serialize_document(document):
         document["id"] = str(document["_id"])
         del document["_id"]
 
+    if "user_id" in document:
+        document["user_id"] = str(document["user_id"])
+
     return document
 
 
-def object_id(value):
-    """
-    Convert string ID to MongoDB ObjectId.
-    """
+# ============================================================
+# AUTH HELPERS
+# ============================================================
 
-    try:
-        return ObjectId(value)
-    except Exception:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid ID"
-        )
+def hash_password(password: str):
+    return hashlib.sha256(
+        password.encode()
+    ).hexdigest()
 
 
-# ─────────────────────────── CURRENT USER ───────────────────────────
+def create_token(data: dict):
+
+    expiration = datetime.utcnow() + timedelta(
+        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+
+    token_data = {
+        **data,
+        "exp": expiration
+    }
+
+    return jwt.encode(
+        token_data,
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+
 
 def get_current_user(
     token: str = Depends(oauth2_scheme)
@@ -138,17 +160,29 @@ def get_current_user(
                 detail="Invalid token"
             )
 
-        user = users_collection.find_one(
-            {"_id": object_id(user_id)}
-        )
+        try:
+
+            object_id = ObjectId(user_id)
+
+        except Exception:
+
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid user ID"
+            )
+
+        user = users_collection.find_one({
+            "_id": object_id
+        })
 
         if not user:
+
             raise HTTPException(
                 status_code=401,
                 detail="User not found"
             )
 
-        return serialize_document(user)
+        return user
 
     except jwt.ExpiredSignatureError:
 
@@ -168,9 +202,12 @@ def get_current_user(
         )
 
 
-# ─────────────────────────── RESUME PARSER ───────────────────────────
+# ============================================================
+# RESUME PARSER
+# ============================================================
 
 SKILL_KEYWORDS = [
+
     "python",
     "javascript",
     "typescript",
@@ -181,44 +218,58 @@ SKILL_KEYWORDS = [
     "fastapi",
     "django",
     "flask",
+
     "sql",
     "postgresql",
     "mysql",
     "mongodb",
     "redis",
+
     "docker",
     "kubernetes",
+
     "aws",
     "azure",
     "gcp",
+
     "git",
     "linux",
+
     "java",
     "c++",
     "c#",
     "go",
     "rust",
+
     "swift",
     "kotlin",
     "flutter",
+
     "machine learning",
     "deep learning",
+
     "tensorflow",
     "pytorch",
     "scikit-learn",
+
     "pandas",
     "numpy",
+
     "tableau",
     "power bi",
+
     "figma",
     "photoshop",
+
     "agile",
     "scrum",
     "jira",
+
     "rest api",
     "graphql",
+
     "html",
-    "css",
+    "css"
 ]
 
 
@@ -241,9 +292,14 @@ def calc_ats_score(text: str, skills: list):
     score = 0
 
     if skills:
-        score += min(len(skills) * 3, 35)
+
+        score += min(
+            len(skills) * 3,
+            35
+        )
 
     if re.search(r"\b\d{4}\b", text):
+
         score += 10
 
     if re.search(
@@ -251,6 +307,7 @@ def calc_ats_score(text: str, skills: list):
         text,
         re.I
     ):
+
         score += 15
 
     if re.search(
@@ -258,6 +315,7 @@ def calc_ats_score(text: str, skills: list):
         text,
         re.I
     ):
+
         score += 15
 
     if re.search(
@@ -265,18 +323,21 @@ def calc_ats_score(text: str, skills: list):
         text,
         re.I
     ):
+
         score += 10
 
     if re.search(
         r"[\w.+-]+@[\w-]+\.[a-z]{2,}",
         text
     ):
+
         score += 10
 
     if re.search(
         r"\b\d{10}\b|\+\d{1,3}[\s-]\d+",
         text
     ):
+
         score += 5
 
     return min(score, 100)
@@ -296,56 +357,78 @@ def extract_experience(text: str):
     )
 
 
-# ─────────────────────────── AUTH ───────────────────────────
+# ============================================================
+# AUTH MODELS
+# ============================================================
 
 class RegisterBody(BaseModel):
+
     name: str
     email: str
     password: str
 
 
+# ============================================================
+# REGISTER
+# ============================================================
+
 @app.post("/api/auth/register")
 def register(body: RegisterBody):
 
-    existing = users_collection.find_one(
-        {"email": body.email}
-    )
+    existing_user = users_collection.find_one({
+        "email": body.email
+    })
 
-    if existing:
+    if existing_user:
+
         raise HTTPException(
             status_code=400,
             detail="Email already registered"
         )
 
-    user_document = {
+    user = {
         "name": body.name,
         "email": body.email,
         "password": hash_password(body.password),
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.utcnow()
     }
 
-    result = users_collection.insert_one(
-        user_document
-    )
+    try:
 
-    user = users_collection.find_one(
-        {"_id": result.inserted_id}
-    )
+        result = users_collection.insert_one(user)
+
+    except Exception as error:
+
+        if "duplicate key" in str(error).lower():
+
+            raise HTTPException(
+                status_code=400,
+                detail="Email already registered"
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Could not create user"
+        )
 
     token = create_token({
-        "user_id": str(user["_id"]),
-        "email": user["email"]
+        "user_id": str(result.inserted_id),
+        "email": body.email
     })
 
     return {
         "token": token,
         "user": {
-            "id": str(user["_id"]),
-            "name": user["name"],
-            "email": user["email"]
+            "id": str(result.inserted_id),
+            "name": body.name,
+            "email": body.email
         }
     }
 
+
+# ============================================================
+# LOGIN
+# ============================================================
 
 @app.post("/api/auth/login")
 def login(
@@ -380,19 +463,25 @@ def login(
     }
 
 
+# ============================================================
+# CURRENT USER
+# ============================================================
+
 @app.get("/api/auth/me")
 def me(
     current_user=Depends(get_current_user)
 ):
 
     return {
-        "id": current_user["id"],
+        "id": str(current_user["_id"]),
         "name": current_user["name"],
         "email": current_user["email"]
     }
 
 
-# ─────────────────────────── RESUME ───────────────────────────
+# ============================================================
+# RESUME UPLOAD
+# ============================================================
 
 @app.post("/api/resume/upload")
 async def upload_resume(
@@ -423,30 +512,41 @@ async def upload_resume(
         )
 
     skills = extract_skills(text)
-    ats = calc_ats_score(text, skills)
+
+    ats_score = calc_ats_score(
+        text,
+        skills
+    )
+
     experience = extract_experience(text)
 
-    resume_document = {
-        "user_id": current_user["id"],
+    resume = {
+        "user_id": current_user["_id"],
         "filename": file.filename,
         "raw_text": text,
         "skills": skills,
         "experience_years": experience,
         "education": "",
-        "ats_score": ats,
-        "uploaded_at": datetime.utcnow(),
+        "ats_score": ats_score,
+        "uploaded_at": datetime.utcnow()
     }
 
     result = resumes_collection.insert_one(
-        resume_document
+        resume
     )
 
-    resume = resumes_collection.find_one(
-        {"_id": result.inserted_id}
+    saved_resume = resumes_collection.find_one({
+        "_id": result.inserted_id
+    })
+
+    return serialize_document(
+        saved_resume
     )
 
-    return serialize_document(resume)
 
+# ============================================================
+# GET LATEST RESUME
+# ============================================================
 
 @app.get("/api/resume/latest")
 def get_latest_resume(
@@ -454,8 +554,12 @@ def get_latest_resume(
 ):
 
     resume = resumes_collection.find_one(
-        {"user_id": current_user["id"]},
-        sort=[("_id", -1)]
+        {
+            "user_id": current_user["_id"]
+        },
+        sort=[
+            ("uploaded_at", -1)
+        ]
     )
 
     if not resume:
@@ -464,7 +568,9 @@ def get_latest_resume(
     return serialize_document(resume)
 
 
-# ─────────────────────────── JOBS ───────────────────────────
+# ============================================================
+# JOB MODEL
+# ============================================================
 
 class JobBody(BaseModel):
 
@@ -477,15 +583,21 @@ class JobBody(BaseModel):
     salary: Optional[str] = None
 
 
+# ============================================================
+# GET JOBS
+# ============================================================
+
 @app.get("/api/jobs")
 def get_jobs(
     current_user=Depends(get_current_user)
 ):
 
     jobs = jobs_collection.find(
-        {"user_id": current_user["id"]}
+        {
+            "user_id": current_user["_id"]
+        }
     ).sort(
-        "_id",
+        "created_at",
         -1
     )
 
@@ -495,14 +607,18 @@ def get_jobs(
     ]
 
 
+# ============================================================
+# ADD JOB
+# ============================================================
+
 @app.post("/api/jobs")
 def add_job(
     body: JobBody,
     current_user=Depends(get_current_user)
 ):
 
-    job_document = {
-        "user_id": current_user["id"],
+    job = {
+        "user_id": current_user["_id"],
         "company": body.company,
         "role": body.role,
         "status": body.status,
@@ -510,19 +626,25 @@ def add_job(
         "notes": body.notes,
         "url": body.url,
         "salary": body.salary,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.utcnow()
     }
 
     result = jobs_collection.insert_one(
-        job_document
+        job
     )
 
-    job = jobs_collection.find_one(
-        {"_id": result.inserted_id}
+    saved_job = jobs_collection.find_one({
+        "_id": result.inserted_id
+    })
+
+    return serialize_document(
+        saved_job
     )
 
-    return serialize_document(job)
 
+# ============================================================
+# UPDATE JOB
+# ============================================================
 
 @app.put("/api/jobs/{job_id}")
 def update_job(
@@ -531,10 +653,12 @@ def update_job(
     current_user=Depends(get_current_user)
 ):
 
-    result = jobs_collection.find_one_and_update(
+    object_id = convert_object_id(job_id)
+
+    result = jobs_collection.update_one(
         {
-            "_id": object_id(job_id),
-            "user_id": current_user["id"]
+            "_id": object_id,
+            "user_id": current_user["_id"]
         },
         {
             "$set": {
@@ -544,21 +668,28 @@ def update_job(
                 "applied_date": body.applied_date,
                 "notes": body.notes,
                 "url": body.url,
-                "salary": body.salary,
+                "salary": body.salary
             }
-        },
-        return_document=True
+        }
     )
 
-    if not result:
+    if result.matched_count == 0:
 
         raise HTTPException(
             status_code=404,
             detail="Job not found"
         )
 
-    return serialize_document(result)
+    job = jobs_collection.find_one({
+        "_id": object_id
+    })
 
+    return serialize_document(job)
+
+
+# ============================================================
+# DELETE JOB
+# ============================================================
 
 @app.delete("/api/jobs/{job_id}")
 def delete_job(
@@ -566,10 +697,14 @@ def delete_job(
     current_user=Depends(get_current_user)
 ):
 
-    result = jobs_collection.delete_one({
-        "_id": object_id(job_id),
-        "user_id": current_user["id"]
-    })
+    object_id = convert_object_id(job_id)
+
+    result = jobs_collection.delete_one(
+        {
+            "_id": object_id,
+            "user_id": current_user["_id"]
+        }
+    )
 
     if result.deleted_count == 0:
 
@@ -583,7 +718,9 @@ def delete_job(
     }
 
 
-# ─────────────────────────── TODOS ───────────────────────────
+# ============================================================
+# TODO MODEL
+# ============================================================
 
 class TodoBody(BaseModel):
 
@@ -593,15 +730,21 @@ class TodoBody(BaseModel):
     due_date: Optional[str] = None
 
 
+# ============================================================
+# GET TODOS
+# ============================================================
+
 @app.get("/api/todos")
 def get_todos(
     current_user=Depends(get_current_user)
 ):
 
     todos = todos_collection.find(
-        {"user_id": current_user["id"]}
+        {
+            "user_id": current_user["_id"]
+        }
     ).sort(
-        "_id",
+        "created_at",
         -1
     )
 
@@ -611,32 +754,42 @@ def get_todos(
     ]
 
 
+# ============================================================
+# ADD TODO
+# ============================================================
+
 @app.post("/api/todos")
 def add_todo(
     body: TodoBody,
     current_user=Depends(get_current_user)
 ):
 
-    todo_document = {
-        "user_id": current_user["id"],
+    todo = {
+        "user_id": current_user["_id"],
         "title": body.title,
         "category": body.category,
         "done": False,
         "priority": body.priority,
         "due_date": body.due_date,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.utcnow()
     }
 
     result = todos_collection.insert_one(
-        todo_document
+        todo
     )
 
-    todo = todos_collection.find_one(
-        {"_id": result.inserted_id}
+    saved_todo = todos_collection.find_one({
+        "_id": result.inserted_id
+    })
+
+    return serialize_document(
+        saved_todo
     )
 
-    return serialize_document(todo)
 
+# ============================================================
+# TOGGLE TODO
+# ============================================================
 
 @app.patch("/api/todos/{todo_id}/toggle")
 def toggle_todo(
@@ -644,9 +797,11 @@ def toggle_todo(
     current_user=Depends(get_current_user)
 ):
 
+    object_id = convert_object_id(todo_id)
+
     todo = todos_collection.find_one({
-        "_id": object_id(todo_id),
-        "user_id": current_user["id"]
+        "_id": object_id,
+        "user_id": current_user["_id"]
     })
 
     if not todo:
@@ -656,29 +811,35 @@ def toggle_todo(
             detail="Todo not found"
         )
 
-    new_status = not todo.get(
+    new_done_value = not todo.get(
         "done",
         False
     )
 
     todos_collection.update_one(
         {
-            "_id": object_id(todo_id),
-            "user_id": current_user["id"]
+            "_id": object_id,
+            "user_id": current_user["_id"]
         },
         {
             "$set": {
-                "done": new_status
+                "done": new_done_value
             }
         }
     )
 
-    updated = todos_collection.find_one(
-        {"_id": object_id(todo_id)}
+    updated_todo = todos_collection.find_one({
+        "_id": object_id
+    })
+
+    return serialize_document(
+        updated_todo
     )
 
-    return serialize_document(updated)
 
+# ============================================================
+# DELETE TODO
+# ============================================================
 
 @app.delete("/api/todos/{todo_id}")
 def delete_todo(
@@ -686,10 +847,14 @@ def delete_todo(
     current_user=Depends(get_current_user)
 ):
 
-    result = todos_collection.delete_one({
-        "_id": object_id(todo_id),
-        "user_id": current_user["id"]
-    })
+    object_id = convert_object_id(todo_id)
+
+    result = todos_collection.delete_one(
+        {
+            "_id": object_id,
+            "user_id": current_user["_id"]
+        }
+    )
 
     if result.deleted_count == 0:
 
@@ -703,7 +868,9 @@ def delete_todo(
     }
 
 
-# ─────────────────────────── MOCK INTERVIEW ───────────────────────────
+# ============================================================
+# MOCK INTERVIEW
+# ============================================================
 
 QUESTIONS_BY_ROLE = {
 
@@ -712,7 +879,7 @@ QUESTIONS_BY_ROLE = {
         "What is your greatest professional strength?",
         "Describe a challenging project and how you handled it.",
         "Where do you see yourself in 5 years?",
-        "Why do you want to work here?",
+        "Why do you want to work here?"
     ],
 
     "software": [
@@ -720,7 +887,7 @@ QUESTIONS_BY_ROLE = {
         "What is Big-O notation? Give an example.",
         "How do you approach debugging a production issue?",
         "Describe your experience with CI/CD pipelines.",
-        "What design patterns have you used in real projects?",
+        "What design patterns have you used in real projects?"
     ],
 
     "data": [
@@ -728,8 +895,8 @@ QUESTIONS_BY_ROLE = {
         "What's the difference between supervised and unsupervised learning?",
         "How do you handle missing data in a dataset?",
         "Describe a model you built end-to-end.",
-        "What evaluation metrics would you choose for a classification problem?",
-    ],
+        "What evaluation metrics would you choose for a classification problem?"
+    ]
 }
 
 
@@ -762,36 +929,49 @@ def get_questions(
         key = "default"
 
     return {
-        "questions":
-        QUESTIONS_BY_ROLE["default"]
-        + QUESTIONS_BY_ROLE[key]
+        "questions": (
+            QUESTIONS_BY_ROLE["default"]
+            + QUESTIONS_BY_ROLE[key]
+        )
     }
 
 
-# ─────────────────────────── DASHBOARD ───────────────────────────
+# ============================================================
+# DASHBOARD
+# ============================================================
 
 @app.get("/api/dashboard")
 def dashboard(
     current_user=Depends(get_current_user)
 ):
 
-    user_id = current_user["id"]
+    uid = current_user["_id"]
 
     jobs = list(
-        jobs_collection.find(
-            {"user_id": user_id}
-        ).sort("_id", -1)
+        jobs_collection.find({
+            "user_id": uid
+        }).sort(
+            "created_at",
+            -1
+        )
     )
 
     todos = list(
-        todos_collection.find(
-            {"user_id": user_id}
+        todos_collection.find({
+            "user_id": uid
+        }).sort(
+            "created_at",
+            -1
         )
     )
 
     resume = resumes_collection.find_one(
-        {"user_id": user_id},
-        sort=[("_id", -1)]
+        {
+            "user_id": uid
+        },
+        sort=[
+            ("uploaded_at", -1)
+        ]
     )
 
     status_counts = {}
@@ -804,8 +984,14 @@ def dashboard(
         )
 
         status_counts[status] = (
-            status_counts.get(status, 0) + 1
+            status_counts.get(status, 0)
+            + 1
         )
+
+    serialized_jobs = [
+        serialize_document(job)
+        for job in jobs
+    ]
 
     return {
 
@@ -821,24 +1007,25 @@ def dashboard(
 
         "todos_total": len(todos),
 
-        "ats_score":
+        "ats_score": (
             resume.get("ats_score", 0)
             if resume
-            else 0,
+            else 0
+        ),
 
-        "skills_count":
+        "skills_count": (
             len(resume.get("skills", []))
             if resume
-            else 0,
+            else 0
+        ),
 
-        "recent_jobs": [
-            serialize_document(job)
-            for job in jobs[:5]
-        ],
+        "recent_jobs": serialized_jobs[:5]
     }
 
 
-# ─────────────────────────── EXPORT ───────────────────────────
+# ============================================================
+# EXPORT JOBS
+# ============================================================
 
 @app.get("/api/export/jobs")
 def export_jobs(
@@ -847,8 +1034,11 @@ def export_jobs(
 
     jobs = jobs_collection.find(
         {
-            "user_id": current_user["id"]
+            "user_id": current_user["_id"]
         }
+    ).sort(
+        "created_at",
+        -1
     )
 
     output = io.StringIO()
@@ -874,7 +1064,7 @@ def export_jobs(
             job.get("applied_date", ""),
             job.get("salary", ""),
             job.get("notes", ""),
-            job.get("url", ""),
+            job.get("url", "")
         ])
 
     output.seek(0)
@@ -887,3 +1077,25 @@ def export_jobs(
             "attachment; filename=jobs.csv"
         }
     )
+
+
+# ============================================================
+# ROOT / HEALTH CHECK
+# ============================================================
+
+@app.get("/")
+def root():
+
+    return {
+        "message": "CareerBoost AI backend is running",
+        "database": "MongoDB Atlas"
+    }
+
+
+@app.get("/health")
+def health():
+
+    return {
+        "status": "ok",
+        "database": "MongoDB Atlas"
+    }
